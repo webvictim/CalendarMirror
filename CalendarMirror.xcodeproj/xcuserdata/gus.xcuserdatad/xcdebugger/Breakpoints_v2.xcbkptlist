@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Bucket
+   uuid = "DC0AABB0-54DC-4409-BDC6-96E0E829ABA9"
+   type = "1"
+   version = "2.0">
+   <Breakpoints>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "87FB6AEB-13A5-405B-9F70-A7C5BC4E9135"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "Calendar Mirror/MirrorBusyApp.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "12"
+            endingLineNumber = "12"
+            landmarkName = "MirrorViewModel"
+            landmarkType = "3">
+            <Locations>
+               <Location
+                  uuid = "87FB6AEB-13A5-405B-9F70-A7C5BC4E9135 - 22870abda8e64729"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "property wrapper backing initializer of Calendar_Mirror.MirrorViewModel.lookbackDays : Swift.String"
+                  moduleName = "Calendar Mirror.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/gus/Seafile/Dropbox/swift/calendar-mirror/Calendar%20Mirror/Calendar%20Mirror/MirrorBusyApp.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "0"
+                  endingLineNumber = "0">
+               </Location>
+               <Location
+                  uuid = "87FB6AEB-13A5-405B-9F70-A7C5BC4E9135 - bb81f087ea008e6e"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "Calendar_Mirror.MirrorViewModel.lookbackDays.getter : Swift.String"
+                  moduleName = "Calendar Mirror.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/gus/Seafile/Dropbox/swift/calendar-mirror/Calendar%20Mirror/Calendar%20Mirror/MirrorBusyApp.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "0"
+                  endingLineNumber = "0">
+               </Location>
+               <Location
+                  uuid = "87FB6AEB-13A5-405B-9F70-A7C5BC4E9135 - 947aa0ef4eb47e22"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "Calendar_Mirror.MirrorViewModel.lookbackDays.setter : Swift.String"
+                  moduleName = "Calendar Mirror.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/gus/Seafile/Dropbox/swift/calendar-mirror/Calendar%20Mirror/Calendar%20Mirror/MirrorBusyApp.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "0"
+                  endingLineNumber = "0">
+               </Location>
+               <Location
+                  uuid = "87FB6AEB-13A5-405B-9F70-A7C5BC4E9135 - f10729f4c87ce25d"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "Calendar_Mirror.MirrorViewModel.lookbackDays.modify : Swift.String"
+                  moduleName = "Calendar Mirror.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/gus/Seafile/Dropbox/swift/calendar-mirror/Calendar%20Mirror/Calendar%20Mirror/MirrorBusyApp.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "0"
+                  endingLineNumber = "0">
+               </Location>
+               <Location
+                  uuid = "87FB6AEB-13A5-405B-9F70-A7C5BC4E9135 - d983626dd90a9b37"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "Calendar_Mirror.MirrorViewModel.$lookbackDays.getter : Combine.Published&lt;Swift.String&gt;.Publisher"
+                  moduleName = "Calendar Mirror.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/gus/Seafile/Dropbox/swift/calendar-mirror/Calendar%20Mirror/Calendar%20Mirror/MirrorBusyApp.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "0"
+                  endingLineNumber = "0">
+               </Location>
+               <Location
+                  uuid = "87FB6AEB-13A5-405B-9F70-A7C5BC4E9135 - 7cce32859b4d836d"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "Calendar_Mirror.MirrorViewModel.$lookbackDays.setter : Combine.Published&lt;Swift.String&gt;.Publisher"
+                  moduleName = "Calendar Mirror.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/gus/Seafile/Dropbox/swift/calendar-mirror/Calendar%20Mirror/%3Cstdin%3E"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "0"
+                  endingLineNumber = "0">
+               </Location>
+               <Location
+                  uuid = "87FB6AEB-13A5-405B-9F70-A7C5BC4E9135 - dccf698063d1812d"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "Calendar_Mirror.MirrorViewModel.$lookbackDays.modify : Combine.Published&lt;Swift.String&gt;.Publisher"
+                  moduleName = "Calendar Mirror.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/gus/Seafile/Dropbox/swift/calendar-mirror/Calendar%20Mirror/Calendar%20Mirror/MirrorBusyApp.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "0"
+                  endingLineNumber = "0">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
+   </Breakpoints>
+</Bucket>
