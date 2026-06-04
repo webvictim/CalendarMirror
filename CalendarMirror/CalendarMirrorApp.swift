@@ -75,10 +75,10 @@ struct MenuBarView: View {
 
         Divider()
 
-        Button("Sync Now") {
+        Button(viewModel.dryRun ? "Sync Now (Dry run: on)" : "Sync Now") {
             viewModel.runMirror()
         }
-        .disabled(viewModel.isRunning || !viewModel.hasAccess)
+        .disabled(viewModel.isRunning || !viewModel.hasAccess || viewModel.dryRun)
 
         Button("Open Window") {
             openWindow(id: "main")

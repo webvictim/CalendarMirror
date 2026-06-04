@@ -8,25 +8,49 @@
 import SwiftUI
 import EventKit
 import Combine
+import ServiceManagement
+
+enum SyncIntervalUnit: String, CaseIterable {
+    case minutes, hours, days
+
+    var inSeconds: Int {
+        switch self {
+        case .minutes: return 60
+        case .hours: return 3600
+        case .days: return 86400
+        }
+    }
+}
+
+enum TitleMode: String, CaseIterable {
+    case copyOriginal = "copyOriginal"
+    case rewrite = "rewrite"
+}
 
 @MainActor
 class MirrorViewModel: ObservableObject {
     @Published var calendars: [EKCalendar] = []
     @Published var selectedSourceID: String = "" {
-        didSet { UserDefaults.standard.set(selectedSourceID, forKey: "selectedSourceID") }
+        didSet { UserDefaults.standard.set(selectedSourceID, forKey: "selectedSourceID"); updateSourceEventCount() }
     }
     @Published var selectedTargetID: String = "" {
         didSet { UserDefaults.standard.set(selectedTargetID, forKey: "selectedTargetID") }
     }
 
-    @Published var lookbackDays: String = "2" {
-        didSet { UserDefaults.standard.set(lookbackDays, forKey: "lookbackDays") }
+    @Published var lookbackDays: Int = 2 {
+        didSet { UserDefaults.standard.set(lookbackDays, forKey: "lookbackDays"); updateSourceEventCount() }
     }
-    @Published var lookaheadDays: String = "21" {
-        didSet { UserDefaults.standard.set(lookaheadDays, forKey: "lookaheadDays") }
+    @Published var lookaheadDays: Int = 21 {
+        didSet { UserDefaults.standard.set(lookaheadDays, forKey: "lookaheadDays"); updateSourceEventCount() }
     }
     @Published var dryRun: Bool = false {
-        didSet { UserDefaults.standard.set(dryRun, forKey: "dryRun") }
+        didSet {
+            UserDefaults.standard.set(dryRun, forKey: "dryRun")
+            if dryRun { autoSyncEnabled = false }
+        }
+    }
+    @Published var titleMode: TitleMode = .rewrite {
+        didSet { UserDefaults.standard.set(titleMode.rawValue, forKey: "titleMode") }
     }
     @Published var title: String = "Busy" {
         didSet { UserDefaults.standard.set(title, forKey: "mirrorTitle") }
@@ -35,19 +59,39 @@ class MirrorViewModel: ObservableObject {
         didSet { UserDefaults.standard.set(titleWasModifiedByUser, forKey: "titleWasModifiedByUser") }
     }
 
+    @Published var sourceEventCount: Int?
+    @Published var launchAtLogin: Bool = false {
+        didSet {
+            UserDefaults.standard.set(launchAtLogin, forKey: "launchAtLogin")
+            if launchAtLogin {
+                try? SMAppService.mainApp.register()
+            } else {
+                try? SMAppService.mainApp.unregister()
+            }
+        }
+    }
+
     @Published var logText: String = ""
     @Published var isRunning: Bool = false
     @Published var hasAccess: Bool = false
     @Published var accessError: String?
 
-    @Published var syncIntervalMinutes: Int = 15 {
-        didSet { UserDefaults.standard.set(syncIntervalMinutes, forKey: "syncIntervalMinutes"); rescheduleTimer() }
+    @Published var syncIntervalValue: Int = 15 {
+        didSet { UserDefaults.standard.set(syncIntervalValue, forKey: "syncIntervalValue"); rescheduleTimer() }
+    }
+    @Published var syncIntervalUnit: SyncIntervalUnit = .minutes {
+        didSet { UserDefaults.standard.set(syncIntervalUnit.rawValue, forKey: "syncIntervalUnit"); rescheduleTimer() }
     }
     @Published var autoSyncEnabled: Bool = false {
         didSet { UserDefaults.standard.set(autoSyncEnabled, forKey: "autoSyncEnabled"); rescheduleTimer() }
     }
     @Published var lastSyncTime: Date?
     @Published var lastSyncSummary: String?
+
+    var nextSyncTime: Date? {
+        guard autoSyncEnabled, let last = lastSyncTime else { return nil }
+        return last.addingTimeInterval(TimeInterval(syncIntervalValue * syncIntervalUnit.inSeconds))
+    }
 
     private let tagPrefix = "[MIRROR srcUID="
     private let store = EKEventStore()
@@ -58,25 +102,50 @@ class MirrorViewModel: ObservableObject {
 
     init() {
         let defaults = UserDefaults.standard
-        if defaults.object(forKey: "syncIntervalMinutes") != nil {
-            syncIntervalMinutes = defaults.integer(forKey: "syncIntervalMinutes")
+        if defaults.object(forKey: "syncIntervalValue") != nil {
+            syncIntervalValue = defaults.integer(forKey: "syncIntervalValue")
+        }
+        if let unitStr = defaults.string(forKey: "syncIntervalUnit"),
+           let unit = SyncIntervalUnit(rawValue: unitStr) {
+            syncIntervalUnit = unit
         }
         if defaults.object(forKey: "autoSyncEnabled") != nil {
             autoSyncEnabled = defaults.bool(forKey: "autoSyncEnabled")
         }
-        if let s = defaults.string(forKey: "lookbackDays") { lookbackDays = s }
-        if let s = defaults.string(forKey: "lookaheadDays") { lookaheadDays = s }
+        if let s = defaults.string(forKey: "lookbackDays"), let v = Int(s) { lookbackDays = v }
+        else if defaults.object(forKey: "lookbackDays") != nil { lookbackDays = defaults.integer(forKey: "lookbackDays") }
+        if let s = defaults.string(forKey: "lookaheadDays"), let v = Int(s) { lookaheadDays = v }
+        else if defaults.object(forKey: "lookaheadDays") != nil { lookaheadDays = defaults.integer(forKey: "lookaheadDays") }
         if let s = defaults.string(forKey: "mirrorTitle") { title = s }
+        if let modeStr = defaults.string(forKey: "titleMode"),
+           let mode = TitleMode(rawValue: modeStr) {
+            titleMode = mode
+        }
         if defaults.object(forKey: "dryRun") != nil { dryRun = defaults.bool(forKey: "dryRun") }
         if defaults.object(forKey: "titleWasModifiedByUser") != nil { titleWasModifiedByUser = defaults.bool(forKey: "titleWasModifiedByUser") }
+        if defaults.object(forKey: "launchAtLogin") != nil { launchAtLogin = defaults.bool(forKey: "launchAtLogin") }
         requestAccess()
+
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in
+                self?.syncIfOverdue()
+            }
+        }
+    }
+
+    private func syncIfOverdue() {
+        guard autoSyncEnabled, hasAccess, !dryRun else { return }
+        guard let next = nextSyncTime, Date() >= next else { return }
+        appendLog("Woke from sleep — running overdue sync.")
+        runMirror()
+        rescheduleTimer()
     }
 
     private func rescheduleTimer() {
         syncTimer?.invalidate()
         syncTimer = nil
-        guard autoSyncEnabled, syncIntervalMinutes > 0 else { return }
-        let interval = TimeInterval(syncIntervalMinutes * 60)
+        guard autoSyncEnabled, syncIntervalValue > 0 else { return }
+        let interval = TimeInterval(syncIntervalValue * syncIntervalUnit.inSeconds)
         syncTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.runMirror()
@@ -184,8 +253,9 @@ class MirrorViewModel: ObservableObject {
         }
 
         appendLog("Loaded \(sorted.count) calendars.")
+        updateSourceEventCount()
     }
-    
+
     private func calendar(withID id: String) -> EKCalendar? {
         calendars.first { $0.calendarIdentifier == id }
     }
@@ -197,6 +267,26 @@ class MirrorViewModel: ObservableObject {
         if let cal = calendars.first(where: { $0.calendarIdentifier == selectedSourceID }) {
             title = "Busy - \(cal.title)"
         }
+    }
+
+    func updateSourceEventCount() {
+        guard hasAccess else { return }
+        guard let srcCal = calendar(withID: selectedSourceID) else {
+            sourceEventCount = nil
+            return
+        }
+        let lb = lookbackDays
+        let la = lookaheadDays
+        let now = Date()
+        let cal = Calendar.current
+        guard let start = cal.date(byAdding: .day, value: -lb, to: now),
+              let end = cal.date(byAdding: .day, value: la, to: now) else {
+            sourceEventCount = nil
+            return
+        }
+        let pred = store.predicateForEvents(withStart: start, end: end, calendars: [srcCal])
+        let events = store.events(matching: pred).filter { $0.availability != .free }
+        sourceEventCount = events.count
     }
     
     // MARK: - Run
@@ -216,13 +306,17 @@ class MirrorViewModel: ObservableObject {
             return
         }
         
-        let lb = Int(lookbackDays) ?? 2
-        let la = Int(lookaheadDays) ?? 21
+        let lb = lookbackDays
+        let la = lookaheadDays
         
         appendLog("Starting mirror run...")
         appendLog("Source: \(srcCal.title), Target: \(tgtCal.title)")
         appendLog("Lookback: \(lb) days, Lookahead: \(la) days, Dry run: \(dryRun ? "YES" : "NO")")
-        appendLog("Mirror title: \(title)")
+        if titleMode == .rewrite {
+            appendLog("Mirror title: \(title)")
+        } else {
+            appendLog("Title mode: copy original")
+        }
         
         // Everything below runs on the main actor (no background threads),
         // so all @Published updates are safe.
@@ -232,8 +326,11 @@ class MirrorViewModel: ObservableObject {
                            lookbackDays: lb,
                            lookaheadDays: la)
         isRunning = false
-        lastSyncTime = Date()
         lastSyncSummary = result
+
+        if !dryRun {
+            lastSyncTime = Date()
+        }
 
         if syncTimer == nil && autoSyncEnabled {
             rescheduleTimer()
@@ -280,13 +377,14 @@ class MirrorViewModel: ObservableObject {
             // Skip free events
             if e.availability == .free { continue }
             guard let s = e.startDate else { continue }
-            
+
             let eEnd0 = e.endDate ?? s.addingTimeInterval(15 * 60)
             let eEnd  = (eEnd0 <= s) ? s.addingTimeInterval(15 * 60) : eEnd0
-            
+            let mirrorTitle = titleMode == .copyOriginal ? (e.title ?? "Busy") : title
+
             let k = mirrorKey(for: e)
             srcKeys.insert(k)
-            
+
             // Find existing mirror
             var mirror: EKEvent? = nil
             for m in tgtEvents {
@@ -295,19 +393,19 @@ class MirrorViewModel: ObservableObject {
                     break
                 }
             }
-            
+
             if let m = mirror {
                 var needUpdate = false
                 if m.isAllDay != e.isAllDay { needUpdate = true }
                 if m.startDate != s || m.endDate != eEnd { needUpdate = true }
-                if m.title != title { needUpdate = true }
-                
+                if m.title != mirrorTitle { needUpdate = true }
+
                 if needUpdate {
                     if !dryRun {
                         m.isAllDay = e.isAllDay
                         m.startDate = s
                         m.endDate = eEnd
-                        m.title = title
+                        m.title = mirrorTitle
                         m.availability = .busy
                         m.alarms = []
                         do {
@@ -325,7 +423,7 @@ class MirrorViewModel: ObservableObject {
                 if !dryRun {
                     let m = EKEvent(eventStore: store)
                     m.calendar = tgtCal
-                    m.title = title
+                    m.title = mirrorTitle
                     m.startDate = s
                     m.endDate = eEnd
                     m.isAllDay = e.isAllDay
