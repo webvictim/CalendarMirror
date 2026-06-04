@@ -12,25 +12,82 @@ import Combine
 @MainActor
 class MirrorViewModel: ObservableObject {
     @Published var calendars: [EKCalendar] = []
-    @Published var selectedSourceID: String = ""
-    @Published var selectedTargetID: String = ""
-    
-    @Published var lookbackDays: String = "2"
-    @Published var lookaheadDays: String = "21"
-    @Published var dryRun: Bool = false
-    @Published var title: String = "Busy"
-    @Published var titleWasModifiedByUser: Bool = false
-    
+    @Published var selectedSourceID: String = "" {
+        didSet { UserDefaults.standard.set(selectedSourceID, forKey: "selectedSourceID") }
+    }
+    @Published var selectedTargetID: String = "" {
+        didSet { UserDefaults.standard.set(selectedTargetID, forKey: "selectedTargetID") }
+    }
+
+    @Published var lookbackDays: String = "2" {
+        didSet { UserDefaults.standard.set(lookbackDays, forKey: "lookbackDays") }
+    }
+    @Published var lookaheadDays: String = "21" {
+        didSet { UserDefaults.standard.set(lookaheadDays, forKey: "lookaheadDays") }
+    }
+    @Published var dryRun: Bool = false {
+        didSet { UserDefaults.standard.set(dryRun, forKey: "dryRun") }
+    }
+    @Published var title: String = "Busy" {
+        didSet { UserDefaults.standard.set(title, forKey: "mirrorTitle") }
+    }
+    @Published var titleWasModifiedByUser: Bool = false {
+        didSet { UserDefaults.standard.set(titleWasModifiedByUser, forKey: "titleWasModifiedByUser") }
+    }
+
     @Published var logText: String = ""
     @Published var isRunning: Bool = false
     @Published var hasAccess: Bool = false
     @Published var accessError: String?
-    
+
+    @Published var syncIntervalMinutes: Int = 15 {
+        didSet { UserDefaults.standard.set(syncIntervalMinutes, forKey: "syncIntervalMinutes"); rescheduleTimer() }
+    }
+    @Published var autoSyncEnabled: Bool = false {
+        didSet { UserDefaults.standard.set(autoSyncEnabled, forKey: "autoSyncEnabled"); rescheduleTimer() }
+    }
+    @Published var lastSyncTime: Date?
+    @Published var lastSyncSummary: String?
+
     private let tagPrefix = "[MIRROR srcUID="
     private let store = EKEventStore()
-    
+    private var syncTimer: Timer?
+    private var hasBeenConfigured: Bool {
+        UserDefaults.standard.string(forKey: "selectedSourceID") != nil
+    }
+
     init() {
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: "syncIntervalMinutes") != nil {
+            syncIntervalMinutes = defaults.integer(forKey: "syncIntervalMinutes")
+        }
+        if defaults.object(forKey: "autoSyncEnabled") != nil {
+            autoSyncEnabled = defaults.bool(forKey: "autoSyncEnabled")
+        }
+        if let s = defaults.string(forKey: "lookbackDays") { lookbackDays = s }
+        if let s = defaults.string(forKey: "lookaheadDays") { lookaheadDays = s }
+        if let s = defaults.string(forKey: "mirrorTitle") { title = s }
+        if defaults.object(forKey: "dryRun") != nil { dryRun = defaults.bool(forKey: "dryRun") }
+        if defaults.object(forKey: "titleWasModifiedByUser") != nil { titleWasModifiedByUser = defaults.bool(forKey: "titleWasModifiedByUser") }
         requestAccess()
+    }
+
+    private func rescheduleTimer() {
+        syncTimer?.invalidate()
+        syncTimer = nil
+        guard autoSyncEnabled, syncIntervalMinutes > 0 else { return }
+        let interval = TimeInterval(syncIntervalMinutes * 60)
+        syncTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.runMirror()
+            }
+        }
+    }
+
+    private func startAutoSyncIfConfigured() {
+        guard hasAccess, hasBeenConfigured, autoSyncEnabled else { return }
+        runMirror()
+        rescheduleTimer()
     }
     
     // MARK: - Permissions
@@ -53,6 +110,7 @@ class MirrorViewModel: ObservableObject {
             appendLog("Status is fullAccess — already have full read/write access.")
             hasAccess = true
             loadCalendars()
+            startAutoSyncIfConfigured()
             
         case .writeOnly:
             appendLog("Status is writeOnly — cannot read calendars with write-only access.")
@@ -74,6 +132,7 @@ class MirrorViewModel: ObservableObject {
             appendLog("Status is authorized — treating as fullAccess.")
             hasAccess = true
             loadCalendars()
+            startAutoSyncIfConfigured()
             
         @unknown default:
             appendLog("Status is unknown (\(status)) — treating as denied.")
@@ -90,6 +149,7 @@ class MirrorViewModel: ObservableObject {
         if granted {
             appendLog("Calendar access granted.")
             loadCalendars()
+            startAutoSyncIfConfigured()
         } else {
             accessError = "Calendar access denied."
             appendLog("ERROR: Calendar access denied.")
@@ -104,16 +164,25 @@ class MirrorViewModel: ObservableObject {
             $0.title.localizedCompare($1.title) == .orderedAscending
         }
         calendars = sorted
-        
-        if let first = sorted.first {
+
+        let defaults = UserDefaults.standard
+        let savedSource = defaults.string(forKey: "selectedSourceID")
+        let savedTarget = defaults.string(forKey: "selectedTargetID")
+
+        if let src = savedSource, sorted.contains(where: { $0.calendarIdentifier == src }) {
+            selectedSourceID = src
+        } else if let first = sorted.first {
             selectedSourceID = first.calendarIdentifier
         }
-        if sorted.count > 1 {
+
+        if let tgt = savedTarget, sorted.contains(where: { $0.calendarIdentifier == tgt }) {
+            selectedTargetID = tgt
+        } else if sorted.count > 1 {
             selectedTargetID = sorted[1].calendarIdentifier
         } else {
             selectedTargetID = selectedSourceID
         }
-        
+
         appendLog("Loaded \(sorted.count) calendars.")
     }
     
@@ -158,11 +227,17 @@ class MirrorViewModel: ObservableObject {
         // Everything below runs on the main actor (no background threads),
         // so all @Published updates are safe.
         isRunning = true
-        _runMirrorInternal(srcCal: srcCal,
+        let result = _runMirrorInternal(srcCal: srcCal,
                            tgtCal: tgtCal,
                            lookbackDays: lb,
                            lookaheadDays: la)
         isRunning = false
+        lastSyncTime = Date()
+        lastSyncSummary = result
+
+        if syncTimer == nil && autoSyncEnabled {
+            rescheduleTimer()
+        }
     }
     
     // MARK: - Core mirror logic
@@ -170,14 +245,14 @@ class MirrorViewModel: ObservableObject {
     private func _runMirrorInternal(srcCal: EKCalendar,
                                     tgtCal: EKCalendar,
                                     lookbackDays: Int,
-                                    lookaheadDays: Int) {
+                                    lookaheadDays: Int) -> String {
         let now = Date()
         let cal = Calendar.current
         
         guard let start = cal.date(byAdding: .day, value: -lookbackDays, to: now),
               let end   = cal.date(byAdding: .day, value:  lookaheadDays, to: now) else {
             appendLog("ERROR: Failed to compute date range.")
-            return
+            return "Error"
         }
         
         let srcPred = store.predicateForEvents(withStart: start, end: end, calendars: [srcCal])
@@ -311,11 +386,13 @@ class MirrorViewModel: ObservableObject {
                 try store.commit()
             } catch {
                 appendLog("ERROR: Commit failed: \(error)")
-                return
+                return "Error"
             }
         }
-        
-        appendLog("Run complete. Created: \(created), Updated: \(updated), Deleted: \(deleted)")
+
+        let summary = "Created: \(created), Updated: \(updated), Deleted: \(deleted)"
+        appendLog("Run complete. \(summary)")
+        return summary
     }
     
     // MARK: - Logging

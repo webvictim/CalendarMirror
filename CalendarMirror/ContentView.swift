@@ -1,29 +1,20 @@
-//
-//  ContentView.swift
-//  CalendarMirror
-//
-//  Created by Gus on 14/11/2025.
-//
-
 import SwiftUI
 import EventKit
 
-// MARK: - Content View
-
 struct ContentView: View {
-    @StateObject private var viewModel = MirrorViewModel()
-    
+    @ObservedObject var viewModel: MirrorViewModel
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("CalendarMirror")
                 .font(.title)
                 .padding(.bottom, 4)
-            
+
             if let err = viewModel.accessError {
                 Text(err)
                     .foregroundColor(.red)
             }
-            
+
             HStack {
                 VStack(alignment: .leading) {
                     Text("Source Calendar")
@@ -38,7 +29,7 @@ struct ContentView: View {
                     .labelsHidden()
                     .frame(width: 220)
                 }
-                
+
                 VStack(alignment: .leading) {
                     Text("Target Calendar")
                     Picker("", selection: $viewModel.selectedTargetID) {
@@ -50,7 +41,7 @@ struct ContentView: View {
                     .frame(width: 220)
                 }
             }
-            
+
             HStack {
                 VStack(alignment: .leading) {
                     Text("Lookback (days)")
@@ -67,7 +58,7 @@ struct ContentView: View {
                 Toggle("Dry run (no changes)", isOn: $viewModel.dryRun)
                     .toggleStyle(.switch)
             }
-            
+
             VStack(alignment: .leading) {
                 Text("Mirror Title")
                 TextField("Busy", text: $viewModel.title, onEditingChanged: { isEditing in
@@ -76,9 +67,27 @@ struct ContentView: View {
                     }
                 })
                 .textFieldStyle(.roundedBorder)
-
             }
-            
+
+            HStack(spacing: 16) {
+                Toggle("Auto-sync", isOn: $viewModel.autoSyncEnabled)
+                    .toggleStyle(.switch)
+
+                VStack(alignment: .leading) {
+                    Text("Interval (minutes)")
+                    Stepper(value: $viewModel.syncIntervalMinutes, in: 1...120) {
+                        Text("\(viewModel.syncIntervalMinutes)")
+                            .frame(width: 30)
+                    }
+                }
+
+                if let lastSync = viewModel.lastSyncTime {
+                    Text("Last sync: \(lastSync.formatted(date: .omitted, time: .standard))")
+                        .foregroundColor(.secondary)
+                        .font(.caption)
+                }
+            }
+
             HStack {
                 Button(action: {
                     viewModel.runMirror()
@@ -87,20 +96,20 @@ struct ContentView: View {
                         if viewModel.isRunning {
                             ProgressView()
                         }
-                        Text(viewModel.isRunning ? "Running..." : "Run")
+                        Text(viewModel.isRunning ? "Running..." : "Sync Now")
                     }
                 }
                 .disabled(viewModel.isRunning || !viewModel.hasAccess)
             }
             .padding(.vertical, 4)
-            
+
             Text("Log")
                 .font(.headline)
                 .padding(.top, 4)
 
             LogTextView(text: $viewModel.logText)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            
+
         }
         .padding(16)
         .frame(minWidth: 700, minHeight: 500)
