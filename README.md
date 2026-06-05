@@ -22,7 +22,7 @@ A macOS menu bar app that mirrors busy events from one Apple Calendar to another
 ### From source
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/webvictim/CalendarMirror
 cd CalendarMirror
 ./build.sh
 ```
