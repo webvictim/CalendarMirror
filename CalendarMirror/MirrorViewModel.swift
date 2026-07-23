@@ -490,7 +490,7 @@ class MirrorViewModel: ObservableObject {
     
     private func appendLog(_ message: String) {
         let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm:ss"
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
         let ts = formatter.string(from: Date())
         logText.append("[\(ts)] \(message)\n")
     }
